@@ -1,0 +1,11 @@
+@ExampleApp_HostAddress = http://localhost:5008
+
+GET {{ExampleApp_HostAddress}}/api/derivekey/
+Accept: application/json
+
+###
+
+GET {{ExampleApp_HostAddress}}/api/tdxquote/
+Accept: application/json
+
+###
