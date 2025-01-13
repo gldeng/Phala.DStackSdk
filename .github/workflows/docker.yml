@@ -1,0 +1,64 @@
+name: Build docker image
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - "*"
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: phala-dstack-exampleapp
+
+jobs:
+  build-docker:
+    runs-on: ubuntu-20.04
+
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      tags: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Print branch name
+        id: extract_branch
+        shell: bash
+        run: |
+          echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+          echo "##[set-output name=release_train;]$(echo ${GITHUB_REF#refs/heads/release/})"
+
+      - name: Build
+        run: go build -v -ldflags "-X main.version=${{ github.event.ref }} -X main.commit=${{ github.sha }} -X main.date=$(date -u +%Y-%m-%dT%H:%MZ)" -o ./fireaelf ./cmd/fireaelf
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@f054a8b539a109f9f41c372932f1ae047eff08c9
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate docker tags/labels from github build context
+        id: meta
+        uses: docker/metadata-action@98669ae865ea3cffbcbaa878cf57c20bbf1c6c38
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=tag
+            type=sha,prefix=,enable=true
+            type=raw,enable=${{ github.ref == 'refs/heads/develop' }},value=develop
+            type=raw,enable=${{ startsWith(github.ref, 'refs/heads/release/v') }},value=${{ steps.extract_branch.outputs.release_train }}
+          flavor: |
+            latest=${{ startsWith(github.ref, 'refs/tags/') }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@ad44023a93711e3deb337508980b4b5e9bcdc5dc
+        with:
+          context: .
+          file: ./ExampleApp/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
